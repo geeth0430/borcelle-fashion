@@ -7,6 +7,7 @@ import './AdminPanel.css'
 
 const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
 const categories = ['Tops', 'Dresses', 'T-Shirts', 'Blazers', 'Jumpsuits', 'Skirts', 'Jeans', 'Shorts']
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
 const emptyProduct = {
   name: '', category: 'Tops', price: '', color: '', image: '', sizes: ['S', 'M', 'L'], stock: 0, sale: false, discountPercent: 30, dailyStyle: false,
 }
@@ -15,9 +16,29 @@ async function api(path, { token, ...options } = {}) {
   const headers = { ...options.headers }
   if (token) headers.Authorization = `Bearer ${token}`
   if (options.body && !(options.body instanceof FormData)) headers['Content-Type'] = 'application/json'
-  const response = await fetch(path, { ...options, headers })
-  const data = response.status === 204 ? null : await response.json()
-  if (!response.ok) throw new Error(data?.message || 'The request could not be completed')
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })
+  } catch {
+    throw new Error('Could not reach the API. Check VITE_API_URL, backend availability, and CORS settings.')
+  }
+
+  const responseText = response.status === 204 ? '' : await response.text()
+  let data = null
+  if (responseText) {
+    try {
+      data = JSON.parse(responseText)
+    } catch {
+      const message = response.ok
+        ? 'The API returned an invalid response. Check the backend API configuration.'
+        : `The API returned HTTP ${response.status} with a non-JSON response. Check VITE_API_URL and backend availability.`
+      throw new Error(message)
+    }
+  }
+  if (!response.ok) throw new Error(data?.message || `The request failed (HTTP ${response.status})`)
+  if (response.status !== 204 && data === null) {
+    throw new Error('The API returned an empty response. Check the backend API configuration.')
+  }
   return data
 }
 
@@ -75,6 +96,9 @@ function AdminPanel() {
       const data = await api('/api/admin/auth/login', {
         method: 'POST', body: JSON.stringify({ username, password }),
       })
+      if (typeof data?.token !== 'string' || !data.token) {
+        throw new Error('The API login response did not include an authentication token.')
+      }
       sessionStorage.setItem('borcelle-admin-token', data.token)
       setLoading(true)
       setToken(data.token)

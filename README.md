@@ -11,7 +11,7 @@ React storefront based on the supplied Borcelle UI screens, with an Express REST
 ## Run locally
 
 1. Install packages with `npm install`.
-2. Copy `.env.example` to `.env` and set `MONGODB_URI`, a private `JWT_SECRET`, `ADMIN_USERNAME`, and `ADMIN_PASSWORD`. For Google sign-in, set `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` to the OAuth web client ID, then add `http://localhost:5173` and each deployed storefront origin under Authorized JavaScript origins in Google Cloud Console. To enable PayHere checkout, also set your PayHere merchant ID and domain-specific merchant secret, and set `APP_URL` to the public HTTPS storefront URL.
+2. Copy `.env.example` to `.env` and set `MONGODB_URI`, a private `JWT_SECRET`, `ADMIN_USERNAME`, and `ADMIN_PASSWORD`. Set `VITE_API_URL` to the API service origin (without `/api`); use the local default of an empty value when Vite proxies `/api` to port 5000. For Google sign-in, set `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` to the OAuth web client ID, then add `http://localhost:5173` and each deployed storefront origin under Authorized JavaScript origins in Google Cloud Console. To enable PayHere checkout, also set your PayHere merchant ID and domain-specific merchant secret, and set `APP_URL` to the public HTTPS storefront URL.
 3. Start MongoDB, then run `npm run dev`.
 4. Open `http://localhost:5173` for the storefront or `http://localhost:5173/admin` for admin sign-in.
 
@@ -20,6 +20,8 @@ The development command starts Vite and the API together. The API is available o
 ## Admin panel
 
 Admin access is configured only through the private `.env` file; there is no public admin registration. Admin endpoints require an eight-hour admin-role token. The panel supports product search, category filtering, create/edit/delete, prices, inventory, colors, sizes, sale and daily-style flags, and local PNG/JPG/WebP image uploads up to 5 MB. The Store Content editor manages brand identity, the announcement, navigation labels, hero slides, homepage category tiles and promotions, campaign/Gift Card copy, and footer/contact details. Uploaded images are stored in `client/public/images/uploads`.
+
+For a Render deployment with separate frontend and API services, set `VITE_API_URL` on the frontend service to the API service's public origin (for example, `https://your-api.onrender.com`) and redeploy so Vite embeds it in the frontend build. Keep `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `JWT_SECRET` on the API service only. The API currently allows cross-origin requests through its CORS middleware.
 
 Admin frontend code is in `client/src/admin`; admin API and authorization are in `server/routes/admin.js` and `server/middleware/requireAdmin.js`. MongoDB mode persists product and site-content edits. Without MongoDB, edits use demo memory and are discarded when the API restarts. Content edits cannot change layout, product/category route destinations, or payment behavior.
 
