@@ -306,7 +306,7 @@ router.get('/products', async (request, response, next) => {
     } else if (query.sale === 'true') {
       products = products.map((product, index) => ({
         ...product,
-        image: `/images/HotDeals${index + 1}.png`,
+        image: `/images/${index === 5 ? 'Hotdeals6' : `HotDeals${index + 1}`}.png`,
       }))
     }
 

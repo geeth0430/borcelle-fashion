@@ -7,11 +7,18 @@ import {
 import defaultSiteContent from '../siteContent.js'
 import './App.css'
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
+const API_BASE_URL = import.meta.env.DEV
+  ? ''
+  : (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
 
 function productImageUrl(image) {
-  return image?.startsWith('/images/') ? `${API_BASE_URL}${image}` : image
+  if (!image?.startsWith('/images/')) return image
+
+  const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  const isUploadedImage = image.startsWith('/images/uploads/')
+
+  return isLocalHost && !isUploadedImage ? image : `${API_BASE_URL}${image}`
 }
 
 const clothingLinks = [

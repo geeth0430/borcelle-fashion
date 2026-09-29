@@ -7,8 +7,17 @@ import './AdminPanel.css'
 
 const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
 const categories = ['Tops', 'Dresses', 'T-Shirts', 'Blazers', 'Jumpsuits', 'Skirts', 'Jeans', 'Shorts']
-const API_BASE_URL = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
-const productImageUrl = (image) => image?.startsWith('/images/') ? `${API_BASE_URL}${image}` : image
+const API_BASE_URL = import.meta.env.DEV
+  ? ''
+  : (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
+function productImageUrl(image) {
+  if (!image?.startsWith('/images/')) return image
+
+  const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  const isUploadedImage = image.startsWith('/images/uploads/')
+
+  return isLocalHost && !isUploadedImage ? image : `${API_BASE_URL}${image}`
+}
 const emptyProduct = {
   name: '', category: 'Tops', price: '', color: '', image: '', sizes: ['S', 'M', 'L'], stock: 0, sale: false, discountPercent: 30, dailyStyle: false,
 }
