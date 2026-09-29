@@ -7,17 +7,6 @@ import './AdminPanel.css'
 
 const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
 const categories = ['Tops', 'Dresses', 'T-Shirts', 'Blazers', 'Jumpsuits', 'Skirts', 'Jeans', 'Shorts']
-const API_BASE_URL = import.meta.env.DEV
-  ? ''
-  : (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
-function productImageUrl(image) {
-  if (!image?.startsWith('/images/')) return image
-
-  const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname)
-  const isUploadedImage = image.startsWith('/images/uploads/')
-
-  return isLocalHost && !isUploadedImage ? image : `${API_BASE_URL}${image}`
-}
 const emptyProduct = {
   name: '', category: 'Tops', price: '', color: '', image: '', sizes: ['S', 'M', 'L'], stock: 0, sale: false, discountPercent: 30, dailyStyle: false,
 }
@@ -28,9 +17,9 @@ async function api(path, { token, ...options } = {}) {
   if (options.body && !(options.body instanceof FormData)) headers['Content-Type'] = 'application/json'
   let response
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })
+    response = await fetch(path, { ...options, headers })
   } catch {
-    throw new Error('Could not reach the API. Check VITE_API_URL, backend availability, and CORS settings.')
+    throw new Error('Could not reach the local API. Make sure the backend is running on port 5000.')
   }
 
   const responseText = response.status === 204 ? '' : await response.text()
@@ -41,7 +30,7 @@ async function api(path, { token, ...options } = {}) {
     } catch {
       const message = response.ok
         ? 'The API returned an invalid response. Check the backend API configuration.'
-        : `The API returned HTTP ${response.status} with a non-JSON response. Check VITE_API_URL and backend availability.`
+        : `The local API returned HTTP ${response.status} with a non-JSON response.`
       throw new Error(message)
     }
   }
@@ -271,7 +260,7 @@ function AdminPanel() {
           <table className="admin-table">
             <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Color</th><th>Stock</th><th>Sizes</th><th>Collections</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
             <tbody>{visibleProducts.map((product) => <tr key={product._id || product.slug}>
-              <td><div className="admin-product-cell"><img src={productImageUrl(product.image)} alt="" /><span>{product.name}</span></div></td>
+              <td><div className="admin-product-cell"><img src={product.image} alt="" /><span>{product.name}</span></div></td>
               <td>{product.category}</td><td>Rs. {Number(product.price).toLocaleString('en-LK')}</td><td>{product.color}</td><td><span className={`admin-stock-status ${product.stock > 0 ? 'admin-stock-status--available' : 'admin-stock-status--unavailable'}`}>{product.stock > 0 ? `In Stock · ${product.stock}` : 'Out of Stock'}</span></td><td><div className="admin-size-badges">{product.sizes.map((size) => <span key={size}>{size}</span>)}</div></td>
               <td><div className="admin-tags">{product.sale && <span>Sale -{product.discountPercent || 30}%</span>}{product.dailyStyle && <span>Daily</span>}{!product.sale && !product.dailyStyle && <span>—</span>}</div></td>
               <td><div className="admin-row-actions"><button title="Edit product" aria-label={`Edit ${product.name}`} onClick={() => openProduct(product)}><Pencil size={16} /></button><button title="Delete product" aria-label={`Delete ${product.name}`} onClick={() => deleteProduct(product)}><Trash2 size={16} /></button></div></td>
@@ -330,7 +319,7 @@ function AdminPanel() {
             <fieldset className="editor-span"><legend>Available sizes</legend><div className="editor-sizes">{sizes.map((size) => <label key={size}><input type="checkbox" checked={form.sizes.includes(size)} onChange={() => toggleSize(size)} />{size}</label>)}</div></fieldset>
             <label className="editor-span">Image path<input name="image" value={form.image} onChange={updateField} placeholder="/images/product.png" required /></label>
             <label className="image-upload editor-span"><ImagePlus size={17} />{uploading ? 'Uploading image...' : 'Upload product image'}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadImage} disabled={uploading} /></label>
-            {form.image && <div className="image-preview editor-span"><img src={productImageUrl(form.image)} alt="Product preview" /><span>{form.image}</span></div>}
+            {form.image && <div className="image-preview editor-span"><img src={form.image} alt="Product preview" /><span>{form.image}</span></div>}
             <label className="editor-check"><input type="checkbox" name="sale" checked={form.sale} onChange={updateField} /> Hot deal</label>
             {form.sale && <label>Hot deal discount (%)<input type="number" name="discountPercent" value={form.discountPercent} onChange={updateField} min="1" max="99" step="1" required /></label>}
             <label className="editor-check"><input type="checkbox" name="dailyStyle" checked={form.dailyStyle} onChange={updateField} /> Daily style</label>

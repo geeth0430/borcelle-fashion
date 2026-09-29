@@ -23,7 +23,7 @@ const orderSchema = new mongoose.Schema({
     city: { type: String, required: true },
     country: { type: String, required: true, enum: ['Sri Lanka'], default: 'Sri Lanka' },
   },
-  status: { type: String, enum: ['pending', 'paid', 'cancelled', 'failed', 'charged_back'], default: 'pending' },
+  status: { type: String, enum: ['placed', 'pending', 'paid', 'cancelled', 'failed', 'charged_back'], default: 'placed' },
   paymentId: String,
   paymentMethod: String,
 }, { timestamps: true })

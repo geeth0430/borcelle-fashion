@@ -9,7 +9,13 @@ Borcelle Fashion is a women's online clothing store website designed to provide 
 - **Database:** MongoDB
 - **Authentication:** JWT & Google Authentication
 - **API:** REST API
-- **Payment:** PayHere (prepared for future integration)
+- **Checkout:** Cash on delivery
+
+## Local Development
+
+Run `npm install`, make sure MongoDB is running on this computer, then run `npm run dev` once. The storefront opens at `http://localhost:5173`, the API at `http://localhost:5000`, and the admin panel at `http://localhost:5173/admin`. Admin sign-in uses `ADMIN_USERNAME` and `ADMIN_PASSWORD` from `.env`.
+
+Local development uses `.env.local` to select `mongodb://127.0.0.1:27017/borcelle`; this file is ignored by Git. Set `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID` in `.env` to keep Google sign-in enabled. If either local port is already in use, stop the other running dev server before starting `npm run dev` again.
 
 ## Features
 

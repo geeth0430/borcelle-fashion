@@ -15,7 +15,6 @@ export const seedProducts = [
   { slug: 'beige-button-down-dress', name: 'Beige Button-Down Dress', category: 'Dresses', price: 4000, color: 'White', image: image('Dress3.png'), sizes, stock: 7 },
   { slug: 'pleated-beige-dress', name: 'Pleated Beige Dress', category: 'Dresses', price: 2500, color: 'White', image: image('Dress4.png'), sizes, stock: 9 },
   { slug: 'light-pink-flared-dress', name: 'Light Pink Flared Dress', category: 'Dresses', price: 4500, color: 'Pink', image: image('Dress5.png'), sizes, stock: 5 },
-  { slug: 'black-fountain-dress', name: 'Black Fountain Dress', category: 'Dresses', price: 5000, color: 'Black', image: image('Dress6.png'), sizes, stock: 3, sale: true, discountPercent: 40 },
   { slug: 'seamless-black-midi-dress', name: 'Seamless Black Midi Dress', category: 'Dresses', price: 4500, color: 'Black', image: image('Dress7.png'), sizes: sizes.slice(2), stock: 3 },
   { slug: 'maroon-t-shirt', name: 'Maroon T-shirt', category: 'T-Shirts', price: 4500, color: 'Red', image: image('Tshirts1.png'), sizes, stock: 10 },
   { slug: 'hot-pink-t-shirt', name: 'Hot Pink T-shirt', category: 'T-Shirts', price: 3500, color: 'Pink', image: image('Tshirts2.png'), sizes, stock: 8, sale: true, discountPercent: 50 },

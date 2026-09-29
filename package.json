@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n WEB,API \"vite\" \"node --watch server/index.js\"",
+    "dev": "concurrently -k -n WEB,API \"vite\" \"node --watch --env-file-if-exists=.env.local server/index.js\"",
     "dev:web": "vite",
-    "dev:api": "node --watch server/index.js",
-    "start": "node server/index.js",
+    "dev:api": "node --watch --env-file-if-exists=.env.local server/index.js",
+    "start": "node --env-file-if-exists=.env.local server/index.js",
     "build": "vite build",
     "lint": "eslint .",
     "api:check": "node --check server/index.js && node --check server/routes.js && node --check server/routes/admin.js && node --check server/middleware/requireAdmin.js && node --check server/models/Product.js && node --check server/models/Cart.js && node --check server/models/Order.js && node --check server/models/SiteContent.js && node --check server/models/User.js && node --check server/models/Newsletter.js && node --check server/data/products.js && node --check server/data/siteContentStore.js && node --check client/siteContent.js",
@@ -16,7 +16,6 @@
   "dependencies": {
     "@react-oauth/google": "^0.13.5",
     "bcryptjs": "^3.0.3",
-    "cors": "^2.8.6",
     "dotenv": "^18.0.4",
     "express": "^5.2.1",
     "google-auth-library": "^11.1.0",
@@ -38,7 +37,6 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.6",
     "globals": "^17.12.0",
-    "vite": "^8.3.0",
-    "wrangler": "^4.142.0"
+    "vite": "^8.3.0"
   }
 }

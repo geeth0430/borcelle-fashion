@@ -2,8 +2,7 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import mongoose from 'mongoose'
-import { Buffer } from 'node:buffer'
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import process from 'node:process'
 import { OAuth2Client } from 'google-auth-library'
 
@@ -21,6 +20,7 @@ const router = Router()
 const googleAuthClient = new OAuth2Client()
 
 const memoryCarts = new Map()
+const memoryOrders = new Map()
 const memoryUsers = new Map()
 const memoryGoogleUsers = new Map()
 const memorySubscribers = new Set()
@@ -130,20 +130,6 @@ function serializeCart(items) {
     .filter(Boolean)
 }
 
-function md5(value) {
-  return createHash('md5').update(value).digest('hex').toUpperCase()
-}
-
-function secureEquals(left, right) {
-  const leftBuffer = Buffer.from(left)
-  const rightBuffer = Buffer.from(right)
-
-  return (
-    leftBuffer.length === rightBuffer.length &&
-    timingSafeEqual(leftBuffer, rightBuffer)
-  )
-}
-
 function customerToken(email) {
   const secret = process.env.JWT_SECRET
 
@@ -155,44 +141,6 @@ function customerToken(email) {
   }
 
   return jwt.sign({ email }, secret, { expiresIn: '7d' })
-}
-
-/*
- * PayHere configuration
- *
- * APP_URL       = Render backend URL
- * FRONTEND_URL  = Cloudflare Pages URL
- */
-function payHereConfig() {
-  const merchantId = process.env.PAYHERE_MERCHANT_ID
-  const merchantSecret = process.env.PAYHERE_MERCHANT_SECRET
-  const appUrl = process.env.APP_URL
-  const frontendUrl = process.env.FRONTEND_URL
-
-  if (!merchantId || !merchantSecret || !appUrl || !frontendUrl) {
-    return null
-  }
-
-  try {
-    const baseUrl = new URL(appUrl)
-    const frontendBaseUrl = new URL(frontendUrl)
-
-    if (
-      baseUrl.protocol !== 'https:' ||
-      frontendBaseUrl.protocol !== 'https:'
-    ) {
-      return null
-    }
-
-    return {
-      merchantId,
-      merchantSecret,
-      baseUrl,
-      frontendBaseUrl,
-    }
-  } catch {
-    return null
-  }
 }
 
 router.get('/health', (_request, response) => {
@@ -303,11 +251,6 @@ router.get('/products', async (request, response, next) => {
         ...product,
         image: `/images/DailyStyle${index + 1}.png`,
       }))
-    } else if (query.sale === 'true') {
-      products = products.map((product, index) => ({
-        ...product,
-        image: `/images/${index === 5 ? 'Hotdeals6' : `HotDeals${index + 1}`}.png`,
-      }))
     }
 
     response.json({ products })
@@ -358,38 +301,16 @@ router.get('/cart', async (request, response, next) => {
   }
 })
 
-/*
- * PayHere checkout
- */
-router.post('/payments/payhere', async (request, response, next) => {
+router.post('/orders', async (request, response, next) => {
   try {
-    const config = payHereConfig()
-
-    if (!config) {
-      return response.status(503).json({
-        message:
-          'Online payment is temporarily unavailable. Please try again later.',
-      })
-    }
-
-    if (!connected()) {
-      return response.status(503).json({
-        message:
-          'Online checkout requires the order database to be connected.',
-      })
-    }
-
-    const customerInput = request.body || {}
-
+    const input = request.body || {}
     const customer = {
-      firstName: String(customerInput.firstName || '').trim(),
-      lastName: String(customerInput.lastName || '').trim(),
-      email: String(customerInput.email || '')
-        .trim()
-        .toLowerCase(),
-      phone: String(customerInput.phone || '').trim(),
-      address: String(customerInput.address || '').trim(),
-      city: String(customerInput.city || '').trim(),
+      firstName: String(input.firstName || '').trim(),
+      lastName: String(input.lastName || '').trim(),
+      email: String(input.email || '').trim().toLowerCase(),
+      phone: String(input.phone || '').trim(),
+      address: String(input.address || '').trim(),
+      city: String(input.city || '').trim(),
       country: 'Sri Lanka',
     }
 
@@ -400,27 +321,25 @@ router.post('/payments/payhere', async (request, response, next) => {
       !/^(?:0\d{9}|\+94\d{9})$/.test(customer.phone) ||
       !customer.address ||
       !customer.city ||
-      Object.values(customer).some(
-        (value) => value.length > 120,
-      )
+      Object.values(customer).some((value) => value.length > 120)
     ) {
       return response.status(400).json({
-        message: 'Enter valid Sri Lankan checkout details.',
+        message: 'Enter valid Sri Lankan delivery details.',
       })
     }
 
-    const cart = await Cart.findOne({
-      sessionId: sessionId(request),
-    })
-      .populate('items.productId')
-      .lean()
-
-    const items = serializeCart(cart?.items || [])
+    const currentSession = sessionId(request)
+    const cart = connected()
+      ? await Cart.findOne({ sessionId: currentSession })
+          .populate('items.productId')
+          .lean()
+      : null
+    const items = connected()
+      ? serializeCart(cart?.items || [])
+      : memoryCarts.get(currentSession) || []
 
     if (!items.length) {
-      return response.status(400).json({
-        message: 'Your bag is empty.',
-      })
+      return response.status(400).json({ message: 'Your bag is empty.' })
     }
 
     const orderItems = items.map((item) => ({
@@ -430,304 +349,79 @@ router.post('/payments/payhere', async (request, response, next) => {
       quantity: item.quantity,
       unitPrice: Number(item.price),
     }))
-
     const amount = orderItems.reduce(
-      (sum, item) =>
-        sum + item.unitPrice * item.quantity,
+      (sum, item) => sum + item.unitPrice * item.quantity,
       0,
     )
 
     if (amount <= 0) {
-      return response.status(400).json({
-        message: 'Your bag total is invalid.',
-      })
+      return response.status(400).json({ message: 'Your bag total is invalid.' })
     }
 
-    const formattedAmount = amount.toFixed(2)
-    const orderId = randomUUID()
-
-    await Order.create({
-      orderId,
-      sessionId: sessionId(request),
+    const orderData = {
+      orderId: randomUUID(),
+      sessionId: currentSession,
       items: orderItems,
       amount,
       currency: 'LKR',
       customer,
-    })
+      status: 'placed',
+      paymentMethod: 'Cash on delivery',
+    }
+    const order = connected()
+      ? await Order.create(orderData)
+      : { ...orderData, createdAt: new Date() }
 
-    /*
-     * Customer returns to Cloudflare frontend.
-     */
-    const returnUrl = new URL(
-      '/',
-      config.frontendBaseUrl,
-    )
+    if (connected()) {
+      await Cart.deleteOne({ sessionId: currentSession })
+    } else {
+      const orders = memoryOrders.get(currentSession) || []
+      orders.unshift(order)
+      memoryOrders.set(currentSession, orders)
+      memoryCarts.delete(currentSession)
+    }
 
-    returnUrl.searchParams.set(
-      'payment',
-      orderId,
-    )
-
-    /*
-     * Customer cancellation also returns to frontend.
-     */
-    const cancelUrl = new URL(
-      '/',
-      config.frontendBaseUrl,
-    )
-
-    cancelUrl.searchParams.set(
-      'payment',
-      orderId,
-    )
-
-    /*
-     * PayHere server notification goes to Render backend.
-     */
-    const notifyUrl = new URL(
-      '/api/payments/payhere/notify',
-      config.baseUrl,
-    )
-
-    /*
-     * PayHere checkout hash.
-     */
-    const hash = md5(
-      config.merchantId +
-        orderId +
-        formattedAmount +
-        'LKR' +
-        md5(config.merchantSecret),
-    )
-
-    /*
-     * Sandbox is the default unless explicitly set to false.
-     */
-    const sandbox =
-      process.env.PAYHERE_SANDBOX !== 'false'
-
-    response.json({
-      checkoutUrl: sandbox
-        ? 'https://sandbox.payhere.lk/pay/checkout'
-        : 'https://www.payhere.lk/pay/checkout',
-
-      fields: {
-        merchant_id: config.merchantId,
-
-        return_url: returnUrl.toString(),
-
-        cancel_url: cancelUrl.toString(),
-
-        notify_url: notifyUrl.toString(),
-
-        first_name: customer.firstName,
-
-        last_name: customer.lastName,
-
-        email: customer.email,
-
-        phone: customer.phone,
-
-        address: customer.address,
-
-        city: customer.city,
-
-        country: 'Sri Lanka',
-
-        order_id: orderId,
-
-        items: orderItems
-          .map(
-            (item) =>
-              `${item.name} (${item.size}) x ${item.quantity}`,
-          )
-          .join(', ')
-          .slice(0, 500),
-
-        currency: 'LKR',
-
-        amount: formattedAmount,
-
-        hash,
-      },
-    })
+    response.status(201).json({ order })
   } catch (error) {
     next(error)
   }
 })
 
-/*
- * PayHere payment notification
- */
-router.post(
-  '/payments/payhere/notify',
-  async (request, response, next) => {
-    try {
-      const config = payHereConfig()
+router.get('/orders', async (request, response, next) => {
+  try {
+    const orders = connected()
+      ? await Order.find({ sessionId: sessionId(request) })
+          .sort({ createdAt: -1 })
+          .select('orderId status amount currency items createdAt paymentMethod')
+          .lean()
+      : memoryOrders.get(sessionId(request)) || []
 
-      if (!config) {
-        return response.sendStatus(503)
-      }
+    response.json({ orders })
+  } catch (error) {
+    next(error)
+  }
+})
 
-      const {
-        merchant_id: merchantId,
-        order_id: orderId,
-        payhere_amount: amount,
-        payhere_currency: currency,
-        status_code: statusCode,
-        md5sig,
-        payment_id: paymentId,
-        method,
-      } = request.body || {}
-
-      const signature = md5(
-        String(merchantId) +
-          String(orderId) +
-          String(amount) +
-          String(currency) +
-          String(statusCode) +
-          md5(config.merchantSecret),
-      )
-
-      if (
-        merchantId !== config.merchantId ||
-        !md5sig ||
-        !secureEquals(
-          signature,
-          String(md5sig).toUpperCase(),
-        )
-      ) {
-        return response.sendStatus(400)
-      }
-
-      const order = await Order.findOne({
-        orderId,
-      })
-
-      if (
-        !order ||
-        currency !== order.currency ||
-        Number(amount).toFixed(2) !==
-          order.amount.toFixed(2)
-      ) {
-        return response.sendStatus(400)
-      }
-
-      const statuses = {
-        '2': 'paid',
-        '0': 'pending',
-        '-1': 'cancelled',
-        '-2': 'failed',
-        '-3': 'charged_back',
-      }
-
-      const nextStatus =
-        statuses[String(statusCode)]
-
-      if (!nextStatus) {
-        return response.sendStatus(400)
-      }
-
-      const allowedTransitions = {
-        pending: [
-          'pending',
-          'paid',
-          'cancelled',
-          'failed',
-        ],
-
-        paid: [
-          'paid',
-          'charged_back',
-        ],
-
-        cancelled: [
-          'cancelled',
-          'paid',
-        ],
-
-        failed: [
-          'failed',
-          'paid',
-        ],
-
-        charged_back: [
-          'charged_back',
-        ],
-      }
-
-      if (
-        !allowedTransitions[order.status]?.includes(
-          nextStatus,
-        )
-      ) {
-        return response.sendStatus(200)
-      }
-
-      if (order.status !== nextStatus) {
-        order.status = nextStatus
-        order.paymentId = String(
-          paymentId || '',
-        )
-        order.paymentMethod = String(
-          method || '',
+router.get('/orders/:orderId', async (request, response, next) => {
+  try {
+    const order = connected()
+      ? await Order.findOne({
+          orderId: request.params.orderId,
+          sessionId: sessionId(request),
+        }).lean()
+      : (memoryOrders.get(sessionId(request)) || []).find(
+          (item) => item.orderId === request.params.orderId,
         )
 
-        await order.save()
-      }
-
-      response.sendStatus(200)
-    } catch (error) {
-      next(error)
+    if (!order) {
+      return response.status(404).json({ message: 'Order not found.' })
     }
-  },
-)
 
-router.get(
-  '/payments/payhere/orders',
-  async (request, response, next) => {
-    try {
-      const orders = await Order.find({
-        sessionId: sessionId(request),
-      })
-        .sort({ createdAt: -1 })
-        .select(
-          'orderId status amount currency items createdAt',
-        )
-        .lean()
-
-      response.json({ orders })
-    } catch (error) {
-      next(error)
-    }
-  },
-)
-
-router.get(
-  '/payments/payhere/orders/:orderId',
-  async (request, response, next) => {
-    try {
-      const order = await Order.findOne({
-        orderId: request.params.orderId,
-        sessionId: sessionId(request),
-      })
-        .select(
-          'orderId status amount currency items createdAt paymentMethod',
-        )
-        .lean()
-
-      if (!order) {
-        return response.status(404).json({
-          message: 'Payment order not found.',
-        })
-      }
-
-      response.json(order)
-    } catch (error) {
-      next(error)
-    }
-  },
-)
+    response.json(order)
+  } catch (error) {
+    next(error)
+  }
+})
 
 router.post(
   '/cart/items',

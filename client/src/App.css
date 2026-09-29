@@ -194,21 +194,21 @@
 .wishlist-item-details .drawer-action:disabled { opacity: .55; cursor: not-allowed; }
 .wishlist-empty { min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #555; font-size: 13px; }
 .wishlist-empty p { margin: 0; }
-.order-card-heading, .payment-order-total { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.order-card-heading, .order-confirmation-total { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .order-status { color: #555; font-size: 11px; text-transform: capitalize; }
 .order-status--paid { color: #16803a; }
 .order-status--pending { color: #9a6500; }
 .order-status--failed, .order-status--cancelled, .order-status--charged_back { color: #b42332; }
 .order-card-date { margin: 0; color: #666; font-size: 11px; }
 .order-card-items { display: grid; gap: 4px; }
-.order-card-items p, .payment-order-items p { margin: 0; color: #444; font-size: 12px; line-height: 1.5; }
-.payment-page { min-height: 55vh; display: grid; align-content: start; justify-items: center; padding: 48px 20px; }
-.payment-result { width: min(100%, 520px); display: grid; gap: 16px; }
-.payment-result h1 { margin: 0; color: #111; font-size: 24px; font-weight: 550; }
-.payment-order-id { margin: 0; color: #555; font-size: 12px; overflow-wrap: anywhere; }
-.payment-order-items { display: grid; gap: 6px; padding: 14px 0; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; }
-.payment-order-total { padding: 12px 0; border-top: 1px solid #ccc; font-size: 12px; }
-.payment-result-note { margin: 0; color: #555; font-size: 12px; line-height: 1.5; }
+.order-card-items p, .order-confirmation-items p { margin: 0; color: #444; font-size: 12px; line-height: 1.5; }
+.order-page { min-height: 55vh; display: grid; align-content: start; justify-items: center; padding: 48px 20px; }
+.order-result { width: min(100%, 520px); display: grid; gap: 16px; }
+.order-result h1 { margin: 0; color: #111; font-size: 24px; font-weight: 550; }
+.order-reference { margin: 0; color: #555; font-size: 12px; overflow-wrap: anywhere; }
+.order-confirmation-items { display: grid; gap: 6px; padding: 14px 0; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; }
+.order-confirmation-total { padding: 12px 0; border-top: 1px solid #ccc; font-size: 12px; }
+.order-result-note { margin: 0; color: #555; font-size: 12px; line-height: 1.5; }
 .quick-view { width: min(760px,92vw); max-height: 88vh; position: relative; display: grid; grid-template-columns: 1fr 1fr; align-self: center; margin: auto; overflow: auto; background: #fff; }
 .quick-view > img { width: 100%; height: 100%; max-height: 620px; object-fit: cover; object-position: center 25%; }
 .quick-details { display: flex; flex-direction: column; align-items: flex-start; padding: 36px 28px; color: #222; }

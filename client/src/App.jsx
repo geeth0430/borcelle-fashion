@@ -7,19 +7,7 @@ import {
 import defaultSiteContent from '../siteContent.js'
 import './App.css'
 
-const API_BASE_URL = import.meta.env.DEV
-  ? ''
-  : (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
-
-function productImageUrl(image) {
-  if (!image?.startsWith('/images/')) return image
-
-  const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname)
-  const isUploadedImage = image.startsWith('/images/uploads/')
-
-  return isLocalHost && !isUploadedImage ? image : `${API_BASE_URL}${image}`
-}
 
 const clothingLinks = [
   { label: 'Dresses', category: 'Dresses' },
@@ -123,26 +111,27 @@ function App() {
   const [notice, setNotice] = useState('')
   const [mobileMenu, setMobileMenu] = useState(false)
   const [heroIndex, setHeroIndex] = useState(0)
-  const [paymentOrder, setPaymentOrder] = useState(null)
+  const [trackedOrder, setTrackedOrder] = useState(null)
   const [storeContent, setStoreContent] = useState(defaultSiteContent)
 
   const category = location.get('category') || ''
   const mode = location.get('mode') || ''
   const pageContent = storeContent.pages[mode]
   const heroSlides = storeContent.heroSlides
-  const paymentOrderId = location.get('payment')
+  const orderId = location.get('order')
 
-  const currentPaymentOrder =
-    paymentOrder?.trackedOrderId === paymentOrderId
-      ? paymentOrder
+  const currentTrackedOrder =
+    trackedOrder?.trackedOrderId === orderId
+      ? trackedOrder
       : null
 
-  const paymentOrderLoading = Boolean(
-    paymentOrderId && !currentPaymentOrder
+  const orderLoading = Boolean(
+    orderId && !currentTrackedOrder
   )
 
   const isCatalog =
     Boolean(category) ||
+    Boolean(filters.search.trim()) ||
     ['size', 'collections', 'daily-style', 'party-shop', 'workwear'].includes(
       mode
     )
@@ -169,7 +158,7 @@ function App() {
   useEffect(() => {
     let active = true
 
-    fetch(`${API_BASE_URL}/api/content`)
+    fetch('/api/content')
       .then((response) =>
         response.ok
           ? response.json()
@@ -237,7 +226,7 @@ function App() {
     const timer = window.setTimeout(() => {
       setLoading(true)
 
-      fetch(`${API_BASE_URL}/api/products?${params}`, {
+      fetch(`/api/products?${params}`, {
         signal: controller.signal,
       })
         .then((response) =>
@@ -271,7 +260,7 @@ function App() {
 
   // Load cart
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/cart`, {
+    fetch('/api/cart', {
       headers: {
         'x-session-id': getSessionId(),
       },
@@ -294,84 +283,53 @@ function App() {
       .catch(() => {})
   }, [])
 
-  // Track PayHere order
   useEffect(() => {
-    const orderId = paymentOrderId
-
     if (!orderId) return
 
     let active = true
-    let refreshTimer
-
-    function loadOrder() {
-      fetch(
-        `${API_BASE_URL}/api/payments/payhere/orders/${encodeURIComponent(
-          orderId
-        )}`,
-        {
-          headers: {
-            'x-session-id': getSessionId(),
-          },
-        }
-      )
-        .then((response) =>
-          response.ok
-            ? response.json()
-            : Promise.reject(
-                new Error('Payment status unavailable')
-              )
-        )
-        .then((data) => {
-          if (!active) return
-
-          setPaymentOrder({
-            ...data,
-            trackedOrderId: orderId,
-          })
-
-          if (data.status === 'pending') {
-            refreshTimer = window.setTimeout(loadOrder, 3000)
-          }
-        })
-        .catch(() => {
-          if (active) {
-            setPaymentOrder({
-              trackedOrderId: orderId,
-              unavailable: true,
-            })
-          }
-        })
-    }
-
-    loadOrder()
+    fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+      headers: { 'x-session-id': getSessionId() },
+    })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Order unavailable')))
+      .then((data) => {
+        if (active) setTrackedOrder({ ...data, trackedOrderId: orderId })
+      })
+      .catch(() => {
+        if (active) setTrackedOrder({ trackedOrderId: orderId, unavailable: true })
+      })
 
     return () => {
       active = false
-      window.clearTimeout(refreshTimer)
     }
-  }, [paymentOrderId])
+  }, [orderId])
 
   const title =
-    mode === 'deals' &&
-    (!pageContent?.title || pageContent.title === 'SALE')
-      ? 'HOT DEALS'
-      : pageContent?.title ||
-        (category
-          ? category.toUpperCase()
-          : mode === 'size'
-            ? 'SHOP BY SIZE'
-            : mode === 'daily-style'
-              ? 'EVERYDAY EDITS'
-              : mode === 'collections'
-                ? 'COLLECTIONS'
-                : 'NEW ARRIVALS')
+    filters.search.trim()
+      ? 'SEARCH RESULTS'
+      : mode === 'deals' &&
+          (!pageContent?.title || pageContent.title === 'SALE')
+        ? 'HOT DEALS'
+        : pageContent?.title ||
+          (category
+            ? category.toUpperCase()
+            : mode === 'size'
+              ? 'SHOP BY SIZE'
+              : mode === 'daily-style'
+                ? 'EVERYDAY EDITS'
+                : mode === 'collections'
+                  ? 'COLLECTIONS'
+                  : 'NEW ARRIVALS')
 
   const sortedProducts = useMemo(
     () => products,
     [products]
   )
 
-  function navigate(nextCategory = '', nextMode = '') {
+  function navigate(nextCategory = '', nextMode = '', preserveSearch = false) {
+    if (!preserveSearch) {
+      setFilters((current) => ({ ...current, search: '' }))
+    }
+
     const params = new URLSearchParams()
 
     if (nextCategory) {
@@ -405,9 +363,7 @@ function App() {
   }
 
   function trackOrder(orderId) {
-    const params = new URLSearchParams({
-      payment: orderId,
-    })
+    const params = new URLSearchParams({ order: orderId })
 
     window.history.pushState(
       {},
@@ -477,7 +433,7 @@ function App() {
   ) {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/cart/items`,
+        '/api/cart/items',
         {
           method: 'POST',
           headers: {
@@ -536,7 +492,7 @@ function App() {
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/newsletter`,
+        '/api/newsletter',
         {
           method: 'POST',
           headers: {
@@ -620,7 +576,7 @@ function App() {
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/auth/google`,
+        '/api/auth/google',
         {
           method: 'POST',
           headers: {
@@ -671,7 +627,7 @@ function App() {
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}${path}`,
+        path,
         {
           method: 'POST',
           headers: {
@@ -712,7 +668,7 @@ function App() {
       const response =
         quantity === 0
           ? await fetch(
-              `${API_BASE_URL}/api/cart/items/${productId}?size=${size}`,
+              `/api/cart/items/${productId}?size=${size}`,
               {
                 method: 'DELETE',
                 headers: {
@@ -722,7 +678,7 @@ function App() {
               }
             )
           : await fetch(
-              `${API_BASE_URL}/api/cart/items/${productId}`,
+              `/api/cart/items/${productId}`,
               {
                 method: 'PATCH',
                 headers: {
@@ -754,48 +710,25 @@ function App() {
   }
 
   async function beginCheckout(customer) {
-    const response = await fetch(
-      `${API_BASE_URL}/api/payments/payhere`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-session-id': getSessionId(),
-        },
-        body: JSON.stringify(customer),
-      }
-    )
+    const response = await fetch('/api/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-id': getSessionId(),
+      },
+      body: JSON.stringify(customer),
+    })
 
     const data = await response.json()
 
     if (!response.ok) {
-      throw new Error(
-        data.message ||
-          'Could not start checkout.'
-      )
+      throw new Error(data.message || 'Could not place your order.')
     }
 
-    const form =
-      document.createElement('form')
-
-    form.method = 'POST'
-    form.action = data.checkoutUrl
-
-    Object.entries(data.fields).forEach(
-      ([name, value]) => {
-        const input =
-          document.createElement('input')
-
-        input.type = 'hidden'
-        input.name = name
-        input.value = value
-
-        form.append(input)
-      }
-    )
-
-    document.body.append(form)
-    form.submit()
+    setCart([])
+    setCartCount(0)
+    setDrawer('')
+    trackOrder(data.order.orderId)
   }
 
   return (
@@ -834,12 +767,21 @@ function App() {
             className="search-box"
             onSubmit={(event) => {
               event.preventDefault()
-              navigate()
+              setFilters((current) => ({
+                ...current,
+                colors: [],
+                sizes: [],
+                availability: [],
+                maxPrice: 15000,
+              }))
+              navigate('', '', true)
             }}
           >
             <input
+              type="search"
               aria-label="Search products"
-              placeholder="Type here......"
+              placeholder="Search products..."
+              autoComplete="off"
               value={filters.search}
               onChange={(event) =>
                 setFilters((current) => ({
@@ -1099,32 +1041,29 @@ function App() {
         </nav>
       </header>
 
-      {paymentOrderId ? (
-        <main className="payment-page">
-          <section className="payment-result">
+      {orderId ? (
+        <main className="order-page">
+          <section className="order-result">
             <p className="eyebrow">
-              BORCELLE ORDER TRACKING
+              BORCELLE ORDER CONFIRMATION
             </p>
 
             <h1>
-              {paymentOrderLoading
-                ? 'Checking payment...'
-                : paymentOrder?.unavailable
-                  ? 'Payment status unavailable'
-                  : paymentOrder?.status ===
-                      'paid'
-                    ? 'Payment confirmed'
-                    : 'Payment status'}
+              {orderLoading
+                ? 'Loading order...'
+                : trackedOrder?.unavailable
+                  ? 'Order not found'
+                  : 'Order placed'}
             </h1>
 
-            <p className="payment-order-id">
-              Order {paymentOrderId}
+            <p className="order-reference">
+              Order {orderId}
             </p>
 
-            {currentPaymentOrder
+            {currentTrackedOrder
               ?.items?.length > 0 && (
-              <div className="payment-order-items">
-                {currentPaymentOrder.items.map(
+              <div className="order-confirmation-items">
+                {currentTrackedOrder.items.map(
                   (item, index) => (
                     <p
                       key={`${item.productId}-${item.size}-${index}`}
@@ -1138,11 +1077,11 @@ function App() {
               </div>
             )}
 
-            {currentPaymentOrder &&
-              !currentPaymentOrder.unavailable && (
-                <div className="payment-order-total">
+            {currentTrackedOrder &&
+              !currentTrackedOrder.unavailable && (
+                <div className="order-confirmation-total">
                   <span>
-                    {currentPaymentOrder.status
+                    {currentTrackedOrder.status
                       .replace(
                         '_',
                         ' '
@@ -1153,7 +1092,7 @@ function App() {
                   <strong>
                     Rs.{' '}
                     {Number(
-                      currentPaymentOrder.amount
+                      currentTrackedOrder.amount
                     ).toLocaleString(
                       'en-LK'
                     )}
@@ -1161,14 +1100,10 @@ function App() {
                 </div>
               )}
 
-            <p className="payment-result-note">
-              {currentPaymentOrder
-                ?.unavailable
+            <p className="order-result-note">
+              {currentTrackedOrder?.unavailable
                 ? 'We could not find this order for this browser. Check My Orders or contact the store.'
-                : currentPaymentOrder?.status ===
-                    'paid'
-                  ? 'Your payment has been verified.'
-                  : 'Payment updates appear here after the gateway confirms your transaction.'}
+                : 'Payment is collected in cash when your order is delivered.'}
             </p>
 
             <button
@@ -1177,7 +1112,7 @@ function App() {
                 setDrawer('orders')
               }
             >
-              TRACK MY ORDERS
+              VIEW MY ORDERS
             </button>
 
             <button
@@ -1926,7 +1861,7 @@ function App() {
 
             <img
               src={
-                productImageUrl(selectedProduct.image)
+                selectedProduct.image
               }
               alt={
                 selectedProduct.name
@@ -2250,7 +2185,7 @@ function ProductGrid({
           <span className="product-image-wrap">
             <img
               className="product-image"
-              src={productImageUrl(product.image)}
+              src={product.image}
               alt={product.name}
               loading="lazy"
             />
@@ -2325,11 +2260,10 @@ function OrderHistory({
 
   useEffect(() => {
     let active = true
-    let refreshTimer
 
     function loadOrders() {
       fetch(
-        `${API_BASE_URL}/api/payments/payhere/orders`,
+        '/api/orders',
         {
           headers: {
             'x-session-id':
@@ -2353,20 +2287,6 @@ function OrderHistory({
             data.orders || []
 
           setOrders(nextOrders)
-
-          if (
-            nextOrders.some(
-              (order) =>
-                order.status ===
-                'pending'
-            )
-          ) {
-            refreshTimer =
-              window.setTimeout(
-                loadOrders,
-                5000
-              )
-          }
         })
         .catch((loadError) => {
           if (active) {
@@ -2386,9 +2306,6 @@ function OrderHistory({
 
     return () => {
       active = false
-      window.clearTimeout(
-        refreshTimer
-      )
     }
   }, [])
 
@@ -2526,10 +2443,7 @@ function CartPanel({
         )
       )
     } catch (error) {
-      setCheckoutError(
-        error.message ||
-          'Could not start checkout.'
-      )
+      setCheckoutError(error.message || 'Could not place your order.')
 
       setCheckoutBusy(false)
     }
@@ -2561,8 +2475,7 @@ function CartPanel({
               </h3>
 
               <p className="checkout-country">
-                Sri Lanka only · LKR
-                payment via PayHere
+                Sri Lanka delivery · Cash on delivery
               </p>
 
               <div className="checkout-name">
@@ -2652,9 +2565,7 @@ function CartPanel({
               </button>
 
               <p className="checkout-secure">
-                You will complete
-                payment securely on
-                PayHere.
+                Pay in cash when your order is delivered.
               </p>
             </form>
           ) : (
@@ -2757,7 +2668,7 @@ function CartPanel({
                   setCheckingOut(true)
                 }
               >
-                CHECKOUT WITH PAYHERE
+                CONTINUE TO CHECKOUT
               </button>
 
               <button
