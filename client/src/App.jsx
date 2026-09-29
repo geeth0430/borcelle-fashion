@@ -7,8 +7,12 @@ import {
 import defaultSiteContent from '../siteContent.js'
 import './App.css'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || ''
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
+
+function productImageUrl(image) {
+  return image?.startsWith('/images/') ? `${API_BASE_URL}${image}` : image
+}
 
 const clothingLinks = [
   { label: 'Dresses', category: 'Dresses' },
@@ -1915,7 +1919,7 @@ function App() {
 
             <img
               src={
-                selectedProduct.image
+                productImageUrl(selectedProduct.image)
               }
               alt={
                 selectedProduct.name
@@ -2239,7 +2243,7 @@ function ProductGrid({
           <span className="product-image-wrap">
             <img
               className="product-image"
-              src={product.image}
+              src={productImageUrl(product.image)}
               alt={product.name}
               loading="lazy"
             />
